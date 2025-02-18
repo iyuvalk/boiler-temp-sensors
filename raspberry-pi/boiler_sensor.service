@@ -1,0 +1,13 @@
+[Unit]
+Description=Boiler Temperature REST API Service
+After=network.target
+
+[Service]
+ExecStart=/opt/boiler_sensor/boiler_sensor.py
+WorkingDirectory=/opt/boiler_sensor
+Restart=always
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

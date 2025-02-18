@@ -1,31 +1,45 @@
 #!/usr/bin/python3
 
+from bottle import Bottle, response, run
 import serial
 import time
 
+# Initialize serial connection
+def init_serial(port="/dev/ttyUSB0", baudrate=9600, timeout=1):
+    try:
+        ser = serial.Serial(port, baudrate, timeout=timeout)
+        time.sleep(2)  # Allow time for initialization
+        return ser
+    except serial.SerialException as e:
+        print(f"Error opening serial port: {e}")
+        return None
 
-def trimmed_average(temps):
-    if len(temps) < 7:
-        return min(temps) if temps else None  # Return lowest value or None if the list is empty
+ser = init_serial()
 
-    sorted_temps = sorted(temps)  # Sort the list
-    trimmed_temps = sorted_temps[3:-3]  # Remove the top and bottom 3
-    average = sum(trimmed_temps) / len(trimmed_temps)  # Calculate the average
+app = Bottle()
 
-    return average
+# Function to read from serial port
+def read_sensor(sensor_id):
+    global ser
 
+    if ser is None:
+        ser = init_serial()
+        return {"error": "Serial port not available"}
+    try:
+        ser.write(f"{sensor_id}\n".encode())
+        res = ser.readline().decode().strip()
+        return {"sensor": sensor_id, "temperature": res}
+    except Exception as e:
+        return {"error": str(e)}
 
-dev_id = "/dev/ttyUSB0"
-s = serial.Serial(dev_id, 9600, timeout=1)
-time.sleep(2)
+@app.route("/boiler_temp/sensor1")
+def get_temperature_sensor1():
+    return read_sensor(1)
 
-try:
-  s.write("1\n".encode())
-  res = s.readline()
-  print(res.decode(), end="")
-finally:
-  try:
-    s.close()
-  except:
-    pass
+@app.route("/boiler_temp/sensor2")
+def get_temperature_sensor2():
+    return read_sensor(2)
+
+if __name__ == "__main__":
+    run(app, host="0.0.0.0", port=8080, debug=True)
 
