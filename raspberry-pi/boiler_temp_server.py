@@ -5,31 +5,44 @@ import serial
 import time
 import json
 import logging
+import threading
 
-# Initialize serial connection
-def init_serial(port="/dev/ttyUSB0", baudrate=9600, timeout=1):
-    try:
-        ser = serial.Serial(port, baudrate, timeout=timeout)
-        time.sleep(5)  # Allow time for initialization
-        return ser
-    except serial.SerialException as e:
-        logger.warning(f"WARN: Error opening serial port: {e}. Will try to initialize it next time.")
-        return None
+latest_temperatures = []
+CACHE_SIZE = 150 # 150 samples at the rate of one sample every two seconds is the number of samples we'll have in 5 minutes
 
-# Function to read from serial port
-def read_sensor(sensor_id):
-    global ser
-
-    if ser is None:
-        ser = init_serial()
-        logger.warning("WARN: Serial port not available. Retrying to init it.")
-    try:
-        ser.write(f"{sensor_id}\n".encode())
-        res = ser.readline().decode().strip()
-        return res
-    except Exception as e:
-        logger.warning("WARN: Failed to communicate with the Arduino. Returning None to force caller to read again." + str(e))
-        return None
+# Function to continuously read data from Arduino
+def read_serial_data(port="/dev/ttyUSB0", baudrate=9600, timeout=2):
+    global latest_temperatures
+    while True:
+        try:
+            ser = serial.Serial(port, baudrate, timeout=timeout)
+            try:
+                raw_data = ser.readline().decode('utf-8').strip()
+                logging.debug("Raw Arduino data: " + raw_data)
+                if raw_data:
+                    temp_data = json.loads(raw_data)
+                    if is_float(temp_data.get("TOP", "")) and \
+                            is_float(temp_data.get("BOTTOM", "") and \
+                            float(temp_data.get("TOP", "")) > -127 and \
+                            float(temp_data.get("BOTTOM", "")) > -127): # The sensor sometimes returns -127 for some reason
+                        latest_temperatures.append(
+                            {
+                                "TOP": float(temp_data.get("TOP", None)),
+                                "BOTTOM": float(temp_data.get("BOTTOM", None)),
+                                "ts": time.time()
+                            }
+                        )
+                        if len(latest_temperatures) > CACHE_SIZE:
+                            latest_temperatures.pop(0)
+            except json.JSONDecodeError:
+                logging.warning("Warning: Received malformed JSON from Arduino.")
+            except serial.SerialException as e:
+                logging.warning(f"Serial Error: {e}")
+                break  # Stop reading if there's a serial error
+            time.sleep(2)
+        except serial.SerialException as e:
+            logging.warning(f"Error: Could not open serial port {port} - {e}")
+            time.sleep(30)
 
 def is_float(string):
     try:
@@ -43,42 +56,41 @@ def is_float(string):
 
 @route("/boiler_temp/current")
 def get_temperature_summary():
-    sensor1 = ""
-    sensor2 = ""
-    retries = 10
-    while is_float(sensor1) == False or is_float(sensor2) == False or sensor1 == -999 or sensor2 == -999:
-        sensor1 = read_sensor(1)
-        sensor2 = read_sensor(2)
-        if is_float(sensor1) == False:
-            logger.warning("WARN: Sensor1 returned non-float result: '" + str(sensor1) + "'. Retrying...")
-            sensor1 = -999
-        if is_float(sensor2) == False:
-            logger.warning("WARN: Sensor2 returned non-float result: '" + str(sensor2) + "'. Retrying...")
-            sensor2 = -999
-        retries = retries - 1
-        if retries <= 0:
-            logger.error("ERROR: Retries exhausted. Giving up.")
-            response.status = 500
-            break
-    res = {
-        "TOP": sensor2,
-        "BOTTOM": sensor1
-    }
-    logger.info("Result: " + json.dumps(res))
-    return res
+    if len(latest_temperatures) > 0:
+        res = {
+            "TOP": sum(d["TOP"] for d in latest_temperatures) / len(latest_temperatures),
+            "BOTTOM": sum(d["BOTTOM"] for d in latest_temperatures) / len(latest_temperatures)
+        }
+        return res
+    else:
+        return -9999
 
 @route("/boiler_temp/sensor1")
 def get_temperature_sensor1():
-    return read_sensor(1)
+    if len(latest_temperatures) > 0:
+        return sum(d["TOP"] for d in latest_temperatures) / len(latest_temperatures)
+    else:
+        return -9999
 
 @route("/boiler_temp/sensor2")
 def get_temperature_sensor2():
-    return read_sensor(2)
+    if len(latest_temperatures) > 0:
+        return sum(d["TOP"] for d in latest_temperatures) / len(latest_temperatures)
+    else:
+        return -9999
+
+@route("/boiler_temp/dump_cache")
+def dump_cache():
+    return json.dumps(latest_temperatures)
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     logger = logging.getLogger("bottle.app")
-    ser = init_serial()
+
+    # Start the background thread for serial reading
+    serial_thread = threading.Thread(target=read_serial_data, daemon=True)
+    serial_thread.start()
+
     run(host="0.0.0.0", port=8080, debug=True)
 
