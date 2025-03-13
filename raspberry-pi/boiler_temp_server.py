@@ -22,9 +22,9 @@ def read_serial_data(port="/dev/ttyUSB0", baudrate=9600, timeout=2):
                 if raw_data:
                     temp_data = json.loads(raw_data)
                     if is_float(temp_data.get("TOP", "")) and \
-                            is_float(temp_data.get("BOTTOM", "") and \
+                            is_float(temp_data.get("BOTTOM", "")) and \
                             float(temp_data.get("TOP", "")) > -127 and \
-                            float(temp_data.get("BOTTOM", "")) > -127): # The sensor sometimes returns -127 for some reason
+                            float(temp_data.get("BOTTOM", "")) > -127:  # The sensor sometimes returns -127 for some reason
                         latest_temperatures.append(
                             {
                                 "TOP": float(temp_data.get("TOP", None)),
