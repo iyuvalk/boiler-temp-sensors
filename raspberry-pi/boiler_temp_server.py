@@ -55,7 +55,7 @@ def is_float(string):
         return False
 
 @route("/boiler_temp/current")
- def get_temperature_summary():
+def get_temperature_summary():
     if len(latest_temperatures) > 0:
         curTime = time.time()
         minTS = min(d["ts"] for d in latest_temperatures)
