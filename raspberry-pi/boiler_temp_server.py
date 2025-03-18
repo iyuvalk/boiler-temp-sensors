@@ -59,7 +59,7 @@ def get_temperature_summary():
     if len(latest_temperatures) > 0:
         curTime = time.time()
         minTS = min(d["ts"] for d in latest_temperatures)
-        maxTs = max(d["ts"] for d in latest_temperatures)
+        maxTS = max(d["ts"] for d in latest_temperatures)
         res = {
             "TOP": sum(d["TOP"] for d in latest_temperatures) / len(latest_temperatures),
             "BOTTOM": sum(d["BOTTOM"] for d in latest_temperatures) / len(latest_temperatures),
