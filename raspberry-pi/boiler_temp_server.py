@@ -55,13 +55,18 @@ def is_float(string):
         return False
 
 @route("/boiler_temp/current")
-def get_temperature_summary():
+ def get_temperature_summary():
     if len(latest_temperatures) > 0:
+        curTime = time.time()
+        minTS = min(d["ts"] for d in latest_temperatures)
+        maxTs = max(d["ts"] for d in latest_temperatures)
         res = {
             "TOP": sum(d["TOP"] for d in latest_temperatures) / len(latest_temperatures),
             "BOTTOM": sum(d["BOTTOM"] for d in latest_temperatures) / len(latest_temperatures),
-            "minTS": min(d["ts"] for d in latest_temperatures),
-            "maxTS": max(d["ts"] for d in latest_temperatures)
+            "minTS": minTS,
+            "maxTS": maxTS,
+            "minTS_rel": curTime - minTS,
+            "maxTS_rel": curTime - maxTs
         }
         return res
     else:
