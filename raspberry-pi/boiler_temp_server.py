@@ -66,7 +66,8 @@ def get_temperature_summary():
             "minTS": minTS,
             "maxTS": maxTS,
             "minTS_rel": curTime - minTS,
-            "maxTS_rel": curTime - maxTS
+            "maxTS_rel": curTime - maxTS,
+            "len(latest_temperatures)": len(latest_temperatures)
         }
         return res
     else:
